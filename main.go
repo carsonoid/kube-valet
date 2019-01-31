@@ -20,7 +20,10 @@ import (
 )
 
 const (
-	KubernetesComponent          = "kube-valet"
+	// KubernetesComponent is the name used when creating kubernetes resources
+	KubernetesComponent = "kube-valet"
+
+	// DefaultElectionConfigmapName is the configmap name used to store leader election information
 	DefaultElectionConfigmapName = "kube-valet-election"
 )
 
@@ -129,13 +132,13 @@ func main() {
 	})
 
 	http.Handle("/metrics", promhttp.Handler())
-	go startMetricsHttp()
+	go startMetricsHTTP()
 
 	// Run the kube valet
 	kd.Run()
 }
 
-func startMetricsHttp() {
+func startMetricsHTTP() {
 	for true {
 		err := http.ListenAndServe(":8080", nil)
 		if err != nil {

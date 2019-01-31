@@ -20,6 +20,10 @@ import (
 )
 
 const (
+	// PackLeftFinalizer is the value put into the nag finalizers list when it
+	// is first processed by kube-valet.
+	// It is used to ensure that any node taints or labels created by the nag
+	// are removed after the nag is deleted.
 	PackLeftFinalizer string = "packleft.nag.finalizer.kube-valet.io"
 )
 
@@ -464,6 +468,7 @@ func (m *Manager) ensureFinalizer(nag *assignmentsv1alpha1.NodeAssignmentGroup) 
 	return nil
 }
 
+// RemoveFinalizer processes a NodeAssigmentGroup and removes the finalizer added by KubeValet if it exists
 func (m *Manager) RemoveFinalizer(nag *assignmentsv1alpha1.NodeAssignmentGroup) error {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version before attempting update
@@ -496,6 +501,8 @@ func (m *Manager) RemoveFinalizer(nag *assignmentsv1alpha1.NodeAssignmentGroup) 
 	return retryErr
 }
 
+// NodeCanBeBalanced returns true if the node is fully ready and should
+// be considered when doing nag calculations
 func NodeCanBeBalanced(node *corev1.Node) bool {
 	isReady := false
 	for _, cond := range node.Status.Conditions {

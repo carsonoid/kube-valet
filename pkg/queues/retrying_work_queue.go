@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+// RetryingWorkQueue is a general-purpose k8s queue handler
 type RetryingWorkQueue struct {
 	queue             workqueue.RateLimitingInterface
 	log               *logging.Logger
@@ -21,8 +22,10 @@ type RetryingWorkQueue struct {
 	stopChan          chan struct{}
 }
 
+// ItemProcessFunc is any func that takes a k8s item and returns an error
 type ItemProcessFunc func(obj interface{}) error
 
+// NewRetryingWorkQueue returns a RetryingWorkQueue
 func NewRetryingWorkQueue(queueType string, indexer cache.Indexer, threadiness int, stopCh chan struct{}) *RetryingWorkQueue {
 	return &RetryingWorkQueue{
 		queue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
@@ -34,6 +37,8 @@ func NewRetryingWorkQueue(queueType string, indexer cache.Indexer, threadiness i
 	}
 }
 
+// AddItem is called every time a new item is added by the RetryingWorkQueue indexer
+// it addds the item to the workqueue
 func (rwq *RetryingWorkQueue) AddItem(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err == nil {
@@ -43,6 +48,7 @@ func (rwq *RetryingWorkQueue) AddItem(obj interface{}) {
 	}
 }
 
+// Run registers the given function and starts the worker goroutines
 func (rwq *RetryingWorkQueue) Run(businessLogicFunc ItemProcessFunc) {
 	defer runtime.HandleCrash()
 
@@ -96,11 +102,11 @@ func (rwq *RetryingWorkQueue) processNextItem() bool {
 		rwq.log.Warningf("%s %s does not exist anymore", rwq.queueType, key)
 		rwq.handleErr(nil, key)
 		return true
-	} else {
-		err := rwq.businessLogicFunc(obj)
-		rwq.handleErr(err, key)
-		return true
 	}
+
+	err := rwq.businessLogicFunc(obj)
+	rwq.handleErr(err, key)
+	return true
 }
 
 // handleErr checks if an error happened and makes sure we will retry later.

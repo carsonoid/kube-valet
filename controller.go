@@ -16,6 +16,7 @@ import (
 	"github.com/domoinc/kube-valet/pkg/controller"
 )
 
+// KubeValet holds the basic config and clients
 type KubeValet struct {
 	kubeClientset  *kubernetes.Clientset
 	valetClientset *valetclient.Clientset
@@ -23,6 +24,7 @@ type KubeValet struct {
 	config         *config.ValetConfig
 }
 
+// NewKubeValet takes clients and config and returns a KubeValet controller
 func NewKubeValet(kc *kubernetes.Clientset, dc *valetclient.Clientset, config *config.ValetConfig) *KubeValet {
 	logging.SetBackend(config.LoggingBackend)
 	return &KubeValet{
@@ -32,15 +34,18 @@ func NewKubeValet(kc *kubernetes.Clientset, dc *valetclient.Clientset, config *c
 	}
 }
 
+// StartControllers starts the Kubernetes resource processing controllers
 func (kd *KubeValet) StartControllers(stop <-chan struct{}) {
 	resourceWatcher := controller.NewResourceWatcher(kd.kubeClientset, kd.valetClientset, kd.config)
 	resourceWatcher.Run(kd.stopChan)
 }
 
+// StopControllers starts the Kubernetes resource processing controllers
 func (kd *KubeValet) StopControllers() {
 	close(kd.stopChan)
 }
 
+// Run starts the KubeValet instance and blocks until stopped
 func (kd *KubeValet) Run() {
 	// Create a channel for leader elect events
 	// and exit signaling
