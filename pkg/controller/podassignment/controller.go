@@ -53,3 +53,7 @@ func (c *Controller) OnUpdatePod(oldPod *corev1.Pod, newPod *corev1.Pod) {
 func (c *Controller) OnDeletePod(pod *corev1.Pod) {
 	c.queue.AddItem(pod)
 }
+
+func (c *Controller) PodManager() *Manager {
+	return c.parMan
+}

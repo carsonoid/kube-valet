@@ -1,0 +1,19 @@
+{
+    "CN": "scheduling.kube-valet.io",
+    "hosts": [
+        "scheduling.kube-valet.io",
+        "192.168.1.6"
+    ],
+    "key": {
+        "algo": "ecdsa",
+        "size": 256
+    },
+    "names": [
+        {
+            "C": "US",
+            "ST": "UT",
+            "L": "Provo"
+        }
+    ]
+}
+

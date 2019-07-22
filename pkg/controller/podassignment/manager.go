@@ -3,15 +3,18 @@ package podassignment
 import (
 	// "encoding/json"
 
-	assignmentsv1alpha1 "github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1"
 	// "github.com/domoinc/kube-valet/pkg/utils"
 	logging "github.com/op/go-logging"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+
 	// "k8s.io/apimachinery/pkg/types"
 	// "k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
+	assignmentsv1alpha1 "github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1"
+	"github.com/domoinc/kube-valet/pkg/utils"
 )
 
 type Manager struct {
@@ -68,55 +71,25 @@ func (m *Manager) GetPodAssignmentsScheduling(pod *corev1.Pod) []*assignmentsv1a
 	return r
 }
 
-// func (m *Manager) InitializePod(pod *corev1.Pod) error {
+func (m *Manager) GetPodSchedulingPatches(pod *corev1.Pod) []utils.JsonPatchOperation {
+	m.log.Debugf("Generating schedule patches for pod in %s", pod.GetNamespace())
 
-// 	m.log.Debugf("Initializing pod: %s", pod.Name)
+	patchOps := []utils.JsonPatchOperation{}
 
-// 	initializedPod := pod.DeepCopy()
+	if !m.PodIsProtected(pod) {
+		// Figure out which assignments this pod matches
+		scheds := m.GetPodAssignmentsScheduling(pod)
 
-// 	if !m.PodIsProtected(initializedPod) {
-// 		// Figure out which assignments this pod matches
-// 		scheds := m.GetPodAssignmentsScheduling(initializedPod)
+		m.log.Debugf("Matched %d scheduling rule(s)", len(scheds))
 
-// 		m.log.Debugf("Matched %d scheduling rule(s)", len(scheds))
+		// Append all patch operations
+		for _, s := range scheds {
+			patchOps = append(patchOps, s.GetPatchOps(pod)...)
+		}
+	}
 
-// 		// Apply all matching assignment scheduling details to pod in order
-// 		for _, s := range scheds {
-// 			s.ApplyToPod(initializedPod)
-// 		}
-// 	}
-
-// 	// Remove self from the list of pending Initializers while preserving ordering.
-// 	if len(initializedPod.GetInitializers().Pending) == 1 {
-// 		initializedPod.ObjectMeta.Initializers = nil
-// 	} else {
-// 		initializedPod.ObjectMeta.Initializers.Pending = append(initializedPod.GetInitializers().Pending[:0], initializedPod.GetInitializers().Pending[1:]...)
-// 	}
-
-// 	oldData, err := json.Marshal(pod)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	newData, err := json.Marshal(initializedPod)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Pod{})
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if !utils.IsEmptyPatch(patchBytes) {
-// 		_, err = m.kubeClient.CoreV1().Pods(pod.Namespace).Patch(pod.Name, types.StrategicMergePatchType, patchBytes)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	return nil
-// }
+	return patchOps
+}
 
 // Reconcilepod handles the business logic for NodeAssigmentGroup changes
 // func (m *Manager) initializePod(pod *corev1.Pod) error {

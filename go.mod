@@ -8,7 +8,7 @@ require (
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/emicklei/go-restful-swagger12 v0.0.0-20170208215640-dcef7f557305 // indirect
 	github.com/ghodss/yaml v1.0.0
-	github.com/golang/glog v0.0.0-20141105023935-44145f04b68c // indirect
+	github.com/golang/glog v0.0.0-20141105023935-44145f04b68c
 	github.com/goware/modvendor v0.0.0-20190516042800-ce72b408a8fe // indirect
 	github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c // indirect
 	github.com/juju/ratelimit v0.0.0-20170523012141-5b9ff8664717 // indirect

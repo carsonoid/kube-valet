@@ -1,20 +1,22 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 
-	assignmentsv1alpha1 "github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1"
-	valet "github.com/domoinc/kube-valet/pkg/client/clientset/versioned"
-	"github.com/domoinc/kube-valet/pkg/config"
-	"github.com/domoinc/kube-valet/pkg/controller/podassignment"
 	"github.com/op/go-logging"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
+	assignmentsv1alpha1 "github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1"
+	valet "github.com/domoinc/kube-valet/pkg/client/clientset/versioned"
+	"github.com/domoinc/kube-valet/pkg/config"
 	"github.com/domoinc/kube-valet/pkg/controller/nodeassignment"
+	"github.com/domoinc/kube-valet/pkg/controller/podassignment"
 	"github.com/domoinc/kube-valet/pkg/controller/scheduling/packleft"
 )
 
@@ -25,6 +27,10 @@ type ResourceWatcher struct {
 	valetClient valet.Interface
 	log         *logging.Logger
 	config      *config.ValetConfig
+
+	parCtlr *podassignment.Controller
+	nagCtlr *nodeassignment.Controller
+	plCtlr  *packleft.Controller
 
 	parInformer cache.Controller
 	parIndexer  cache.Indexer
@@ -69,9 +75,54 @@ func (rw *ResourceWatcher) addPodController(controller PodController) {
 	rw.podControllers = append(rw.podControllers, controller)
 }
 
+func (rw *ResourceWatcher) clearAllControllers() {
+	// Set all controller slices to nil to clear them out
+	// https://github.com/golang/go/wiki/CodeReviewComments#declaring-empty-slices
+	rw.nodeControllers = nil
+	rw.nagControllers = nil
+	rw.podControllers = nil
+}
+
+func (rw *ResourceWatcher) StartElectedComponents(ctx context.Context) {
+	rw.log.Noticef("Starting elected components")
+
+	if rw.config.ParController.ShouldRun {
+		rw.addPodController(rw.parCtlr)
+	}
+
+	if rw.config.NagController.ShouldRun {
+		rw.addNodeController(rw.nagCtlr)
+		rw.addNagController(rw.nagCtlr)
+	}
+
+	if rw.config.PLController.ShouldRun {
+		rw.addNodeController(rw.plCtlr)
+		rw.addNagController(rw.plCtlr)
+		rw.addPodController(rw.plCtlr)
+	}
+
+	// Force a resync of all watched resources in case something was missed during leader switch
+	// All controllers are state-seeking so this is safe to do
+	if err := rw.nodeIndexer.Resync(); err != nil {
+		rw.log.Errorf("Error during resync after being elected")
+	}
+}
+
+func (rw *ResourceWatcher) StopElectedComponents() {
+	rw.log.Noticef("Stopping elected components")
+
+	// Remove all controllers to stop doing elected tasks
+	// Caches will continue to run in order to continue to provide data
+	// for webhook requests
+	rw.clearAllControllers()
+}
+
+func (rw *ResourceWatcher) ParController() *podassignment.Controller {
+	return rw.parCtlr
+}
+
 // Run starts the indexers, informers, and controllers.
 func (rw *ResourceWatcher) Run(stopChan chan struct{}) {
-
 	rw.log.Infof("starting controllers")
 
 	coreRestClient := rw.kubeClient.CoreV1().RESTClient()
@@ -164,29 +215,12 @@ func (rw *ResourceWatcher) Run(stopChan chan struct{}) {
 	//TODO: make resync configurable?
 	rw.cparIndexer, rw.cparInformer = cache.NewIndexerInformer(cparListWatcher, &assignmentsv1alpha1.ClusterPodAssignmentRule{}, 0, cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
 
-	var parCtlr *podassignment.Controller
-	if rw.config.ParController.ShouldRun {
-		parCtlr = podassignment.NewController(rw.podIndexer, rw.cparIndexer, rw.parIndexer, rw.kubeClient, rw.valetClient, rw.config.ParController.Threads, stopChan)
-		rw.addPodController(parCtlr)
-	}
-
-	var nagCtlr *nodeassignment.Controller
-	if rw.config.NagController.ShouldRun {
-		nagCtlr = nodeassignment.NewController(rw.nagIndexer, rw.nodeIndexer, rw.kubeClient, rw.valetClient, rw.config.NagController.Threads, stopChan)
-		rw.addNodeController(nagCtlr)
-		rw.addNagController(nagCtlr)
-	}
-
-	var plCtlr *packleft.Controller
-	if rw.config.PLController.ShouldRun {
-		plCtlr = packleft.NewController(rw.nagIndexer, rw.nodeIndexer, rw.podIndexer, rw.kubeClient, rw.valetClient, rw.config.PLController.Threads, stopChan)
-		rw.addNodeController(plCtlr)
-		rw.addNagController(plCtlr)
-		rw.addPodController(plCtlr)
-	}
+	// Initialize controllers
+	rw.parCtlr = podassignment.NewController(rw.podIndexer, rw.cparIndexer, rw.parIndexer, rw.kubeClient, rw.valetClient, rw.config.ParController.Threads, stopChan)
+	rw.nagCtlr = nodeassignment.NewController(rw.nagIndexer, rw.nodeIndexer, rw.kubeClient, rw.valetClient, rw.config.NagController.Threads, stopChan)
+	rw.plCtlr = packleft.NewController(rw.nagIndexer, rw.nodeIndexer, rw.podIndexer, rw.kubeClient, rw.valetClient, rw.config.PLController.Threads, stopChan)
 
 	// start caches
-	rw.log.Infof("starting pod informer")
 	go rw.podInformer.Run(stopChan)
 	rw.log.Infof("starting node informer")
 	go rw.nodeInformer.Run(stopChan)
@@ -206,13 +240,12 @@ func (rw *ResourceWatcher) Run(stopChan chan struct{}) {
 	// start controller queue processing
 	if rw.config.NagController.ShouldRun {
 		rw.log.Info("starting nag controller")
-		go nagCtlr.Run()
+		go rw.nagCtlr.Run()
 	}
 	if rw.config.PLController.ShouldRun {
 		rw.log.Info("starting pack left controller")
-		go plCtlr.Run()
+		go rw.plCtlr.Run()
 	}
-
 }
 
 func (rw *ResourceWatcher) waitForCacheSync(stopChan chan struct{}, informer cache.Controller, infType string) {
