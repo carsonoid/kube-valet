@@ -36,15 +36,6 @@ func NewController(podIndex cache.Indexer, cparIndex cache.Indexer, parIndex cac
 	}
 }
 
-// Run start the podassignment.Controller
-func (c *Controller) Run() {
-	c.queue.Run(func(obj interface{}) error {
-		pod := obj.(*corev1.Pod)
-		c.log.Debugf("processing business logic for pod %s", pod.Name)
-		return c.parMan.initializePod(pod)
-	})
-}
-
 // OnAddPod process the pod initializer
 func (c *Controller) OnAddPod(pod *corev1.Pod) {
 	c.queue.AddItem(pod)

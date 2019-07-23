@@ -204,10 +204,6 @@ func (rw *ResourceWatcher) Run(stopChan chan struct{}) {
 	rw.waitForCacheSync(stopChan, rw.cparInformer, "cpar")
 
 	// start controller queue processing
-	if rw.config.ParController.ShouldRun {
-		rw.log.Info("starting par controller")
-		go parCtlr.Run()
-	}
 	if rw.config.NagController.ShouldRun {
 		rw.log.Info("starting nag controller")
 		go nagCtlr.Run()
