@@ -9,11 +9,8 @@ import (
 	"github.com/domoinc/kube-valet/pkg/controller/podassignment"
 	"github.com/op/go-logging"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	runtime_pkg "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
@@ -26,8 +23,8 @@ import (
 type ResourceWatcher struct {
 	kubeClient  kubernetes.Interface
 	valetClient valet.Interface
-	log            *logging.Logger
-	config         *config.ValetConfig
+	log         *logging.Logger
+	config      *config.ValetConfig
 
 	parInformer cache.Controller
 	parIndexer  cache.Indexer
@@ -55,8 +52,8 @@ func NewResourceWatcher(kubeClientet kubernetes.Interface, valetClient valet.Int
 	return &ResourceWatcher{
 		kubeClient:  kubeClientet,
 		valetClient: valetClient,
-		log:            logging.MustGetLogger("ResourceWatcher"),
-		config:         config,
+		log:         logging.MustGetLogger("ResourceWatcher"),
+		config:      config,
 	}
 }
 
@@ -83,21 +80,8 @@ func (rw *ResourceWatcher) Run(stopChan chan struct{}) {
 	//pod controller
 	podListWatch := cache.NewListWatchFromClient(coreRestClient, "pods", corev1.NamespaceAll, fields.Everything())
 
-	// Wrap the returned listwatch to workaround the inability to include
-	// the `IncludeUninitialized` list option when setting up watch clients.
-	includeUninitializedListwatch := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime_pkg.Object, error) {
-			options.IncludeUninitialized = true
-			return podListWatch.List(options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.IncludeUninitialized = true
-			return podListWatch.Watch(options)
-		},
-	}
-
 	//TODO: make resync configurable?
-	rw.podIndexer, rw.podInformer = cache.NewIndexerInformer(includeUninitializedListwatch, &corev1.Pod{}, 0,
+	rw.podIndexer, rw.podInformer = cache.NewIndexerInformer(podListWatch, &corev1.Pod{}, 0,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*corev1.Pod)

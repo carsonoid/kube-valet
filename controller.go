@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/op/go-logging"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,8 +21,8 @@ import (
 type KubeValet struct {
 	kubeClient  kubernetes.Interface
 	valetClient valet.Interface
-	stopChan       chan struct{}
-	config         *config.ValetConfig
+	stopChan    chan struct{}
+	config      *config.ValetConfig
 }
 
 func NewKubeValet(kc kubernetes.Interface, dc valet.Interface, config *config.ValetConfig) *KubeValet {
@@ -28,12 +30,14 @@ func NewKubeValet(kc kubernetes.Interface, dc valet.Interface, config *config.Va
 	return &KubeValet{
 		kubeClient:  kc,
 		valetClient: dc,
-		config:         config,
+		config:      config,
 	}
 }
 
-func (kd *KubeValet) StartControllers(stop <-chan struct{}) {
+func (kd *KubeValet) StartControllers(ctx context.Context) {
 	resourceWatcher := controller.NewResourceWatcher(kd.kubeClient, kd.valetClient, kd.config)
+	kd.stopChan = make(chan struct{})
+	defer close(kd.stopChan)
 	resourceWatcher.Run(kd.stopChan)
 }
 
@@ -44,8 +48,7 @@ func (kd *KubeValet) StopControllers() {
 func (kd *KubeValet) Run() {
 	// Create a channel for leader elect events
 	// and exit signaling
-	kd.stopChan = make(chan struct{})
-	defer close(kd.stopChan)
+	ctx := context.Background()
 
 	log.Notice("Running controllers")
 	// Do Election
@@ -58,6 +61,7 @@ func (kd *KubeValet) Run() {
 			*electNamespace,
 			*electName,
 			kd.kubeClient.CoreV1(),
+			kd.kubeClient.CoordinationV1(),
 			resourcelock.ResourceLockConfig{
 				Identity: *electID,
 				EventRecorder: record.NewBroadcaster().NewRecorder(
@@ -72,7 +76,7 @@ func (kd *KubeValet) Run() {
 
 		log.Debug("Building LeaderElector")
 
-		leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
+		leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
 			Lock:          rl,
 			LeaseDuration: *electDuration,
 			RenewDeadline: *electDeadline,
@@ -87,7 +91,7 @@ func (kd *KubeValet) Run() {
 		})
 	} else {
 		log.Debug("Leader election disabled. Running controllers.")
-		kd.StartControllers(kd.stopChan)
+		kd.StartControllers(ctx)
 		<-kd.stopChan
 	}
 }

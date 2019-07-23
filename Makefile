@@ -64,40 +64,26 @@ gen-customresources: clean-customresources
 	cp ./_openapi/print_test.go ./pkg/client/openapi
 
 	# Generate client and deepcopy
-	./vendor/k8s.io/code-generator/generate-groups-custom.sh deepcopy,client \
+	./vendor/k8s.io/code-generator/generate-groups-custom.sh deepcopy,client,informer,lister,openapi \
 	github.com/domoinc/kube-valet/pkg/client \
 	github.com/domoinc/kube-valet/pkg/apis \
 	"assignments:v1alpha1" \
-	--output-base ./ --output-package pkg/client/clientset \
+	--output-base ./build \
 	--go-header-file "$(PWD)/boilerplate/boilerplate.go.txt"
 
-	# Deepcopy-gen ignores the output-package arg. Move generated files manually and cleanup
-	mv github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1/zz_generated.deepcopy.go pkg/apis/assignments/v1alpha1/
-	rm -rf github.com
+	# Move generated files
+	mv build/github.com/domoinc/kube-valet/pkg/apis/assignments/v1alpha1/zz_generated.deepcopy.go pkg/apis/assignments/v1alpha1/
+	mv \
+		build/github.com/domoinc/kube-valet/pkg/client/clientset \
+		build/github.com/domoinc/kube-valet/pkg/client/informers \
+		build/github.com/domoinc/kube-valet/pkg/client/listers \
+		pkg/client
+	mv \
+		build/github.com/domoinc/kube-valet/pkg/client/openapi/* \
+		pkg/client/openapi
 
-	# Generate listers
-	./vendor/k8s.io/code-generator/generate-groups-custom.sh lister \
-	github.com/domoinc/kube-valet/pkg/client \
-	github.com/domoinc/kube-valet/pkg/apis \
-	"assignments:v1alpha1" \
-	--output-base ./ --output-package pkg/client/listers \
-	--go-header-file "$(PWD)/boilerplate/boilerplate.go.txt"
-
-	# Generate informers
-	./vendor/k8s.io/code-generator/generate-groups-custom.sh informer \
-	github.com/domoinc/kube-valet/pkg/client \
-	github.com/domoinc/kube-valet/pkg/apis \
-	"assignments:v1alpha1" \
-	--output-base ./ --output-package pkg/client/informers \
-	--go-header-file "$(PWD)/boilerplate/boilerplate.go.txt"
-
-	# Generate openapi spec
-	./vendor/k8s.io/code-generator/generate-groups-custom.sh openapi \
-	github.com/domoinc/kube-valet/pkg/client \
-	github.com/domoinc/kube-valet/pkg/apis \
-	"assignments:v1alpha1" \
-	--output-base ./ --output-package pkg/client/openapi \
-	--go-header-file "$(PWD)/boilerplate/boilerplate.go.txt"
+	# Cleanup gen dir
+	rm -rf build/github.com
 
 	go test ./pkg/client/openapi/*.go -test.run=TestWriteOpenAPISpec
 

@@ -8,7 +8,6 @@ import (
 	logging "github.com/op/go-logging"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	runtime_pkg "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
@@ -16,19 +15,19 @@ import (
 )
 
 type Manager struct {
-	log           *logging.Logger
-	podIndex      cache.Indexer
-	cparIndex     cache.Indexer
-	parIndex      cache.Indexer
+	log        *logging.Logger
+	podIndex   cache.Indexer
+	cparIndex  cache.Indexer
+	parIndex   cache.Indexer
 	kubeClient kubernetes.Interface
 }
 
 func NewManager(podIndex cache.Indexer, cparIndex cache.Indexer, parIndex cache.Indexer, kubeClient kubernetes.Interface) *Manager {
 	return &Manager{
-		log:           logging.MustGetLogger("PodAssignmentManager"),
-		podIndex:      podIndex,
-		cparIndex:     cparIndex,
-		parIndex:      parIndex,
+		log:        logging.MustGetLogger("PodAssignmentManager"),
+		podIndex:   podIndex,
+		cparIndex:  cparIndex,
+		parIndex:   parIndex,
 		kubeClient: kubeClient,
 	}
 }
@@ -73,11 +72,7 @@ func (m *Manager) InitializePod(pod *corev1.Pod) error {
 
 	m.log.Debugf("Initializing pod: %s", pod.Name)
 
-	o, err := runtime_pkg.NewScheme().DeepCopy(pod)
-	if err != nil {
-		return err
-	}
-	initializedPod := o.(*corev1.Pod)
+	initializedPod := pod.DeepCopy()
 
 	if !m.PodIsProtected(initializedPod) {
 		// Figure out which assignments this pod matches
