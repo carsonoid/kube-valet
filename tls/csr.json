@@ -1,6 +1,7 @@
 {
     "CN": "scheduling.kube-valet.io",
     "hosts": [
+        "kube-valet.kube-valet.svc",
         "scheduling.kube-valet.io",
         "192.168.1.6"
     ],
